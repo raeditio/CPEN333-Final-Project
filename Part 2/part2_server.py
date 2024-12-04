@@ -1,5 +1,5 @@
-# Group#:
-# Student Names:
+# Group#: G13
+# Student Names: Ryan Jung and Daniel Juca
 
 #Content of server.py; To complete/implement
 

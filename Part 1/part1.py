@@ -1,5 +1,5 @@
-# Group#:
-# Student Names: Daniel Juca
+# Group#: G13
+# Student Names: Ryan Jung and Daniel Juca
 
 """
     This program implements a variety of the snake 

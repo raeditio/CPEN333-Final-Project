@@ -77,7 +77,6 @@ You are allowed to add inner functions to any of the methods but do not add any 
 
 Make sure that your code is readable and add comments whenever needed to explain your code.
 
-Here is the code template:</li>
 </ul>
 
 ==================== 

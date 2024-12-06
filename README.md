@@ -81,7 +81,7 @@ Make sure that your code is readable and add comments whenever needed to explain
 
 ==================== 
 
-Part 1_alternaive: 
+### Part 1_alternaive: 
 Submit another complete implementation of part1 (all in one .py file, include part1_alternative as a part of the name of the file), but with one modification for the implementation related to an important aspect of the game related to this course: e.g. multi-tasking synchronization/communication, GUI, ... . Some examples of acceptable new implementation approaches would be:
 
 * instead of tkinter, using a different GUI framework, such as pygame, ...
@@ -94,7 +94,7 @@ Note that this portion of the project will have a weight of roughly 10% (dependi
 
 ==================== 
 
-Part 2: Simple Chat Application
+### Part 2: Simple Chat Application
 In this part of the project, you are going to implement a simple chat application. You will use the python 3 standard library modules of socket, multiprocessing, threading and tkiner. No other modules are to be used.
 
 The program consists of three .py files: main.py (use as is), client.py and server.py. The client and server are imported into our main.py, where we will use the main() functions (as see below in the template).

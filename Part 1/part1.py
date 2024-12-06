@@ -225,7 +225,122 @@ class Game():
             self.gameNotOver = False
             self.queue.put({"game_over" : self.gameNotOver})
 
-        #complete the method implementation below
+    def getPreyCorners(self,preycoords : tuple)->list:
+
+        #x and y of top left corner of prey
+        (pxtl, pytl) = preycoords
+        #store corner cords of prey
+        preytl = (pxtl,pytl)
+        preytr = (pxtl + PREY_ICON_WIDTH, pytl)
+        preybl = (pxtl, pytl + PREY_ICON_WIDTH)
+        preybr = (pxtl + PREY_ICON_WIDTH, pytl + PREY_ICON_WIDTH)
+        
+        return[preytl,preytr,preybr,preybl]
+
+
+    def getSnakePortionCorners(self,coords : tuple, direction : str)->list:
+
+        (nx,ny) = coords
+
+        if direction == "Left":
+            #corner coords of snake
+            snaketl = (nx, ny - SNAKE_ICON_WIDTH // 2)
+            snaketr = (nx + SNAKE_ICON_WIDTH, ny - SNAKE_ICON_WIDTH // 2)
+            snakebr = (nx + SNAKE_ICON_WIDTH, ny + SNAKE_ICON_WIDTH//2)
+            snakebl = (nx, ny + SNAKE_ICON_WIDTH//2)
+        
+        elif direction == "Right":
+            #corner coords of snake
+            snaketl = (nx - SNAKE_ICON_WIDTH, ny - SNAKE_ICON_WIDTH//2)
+            snaketr = (nx, ny - SNAKE_ICON_WIDTH//2)
+            snakebr = (nx, ny + SNAKE_ICON_WIDTH // 2)
+            snakebl = (nx - SNAKE_ICON_WIDTH, ny + SNAKE_ICON_WIDTH // 2)
+            
+        elif direction == "Up":
+            #corner coords of snake
+            snaketl = (nx - SNAKE_ICON_WIDTH // 2, ny)
+            snaketr = (nx + SNAKE_ICON_WIDTH // 2, ny)
+            snakebr = (nx + SNAKE_ICON_WIDTH // 2, ny + SNAKE_ICON_WIDTH)
+            snakebl = (nx - SNAKE_ICON_WIDTH // 2, ny + SNAKE_ICON_WIDTH)
+
+        elif direction == "Down":
+            #corner coords of snake
+            snaketl = (nx - SNAKE_ICON_WIDTH // 2, ny - SNAKE_ICON_WIDTH)
+            snaketr = (nx + SNAKE_ICON_WIDTH // 2, ny - SNAKE_ICON_WIDTH)
+            snakebr = (nx + SNAKE_ICON_WIDTH // 2, ny)
+            snakebl = (nx - SNAKE_ICON_WIDTH // 2, ny)
+
+        return [snaketl,snaketr,snakebr,snakebl]
+
+    def getFullSnakeCorners(self) -> list:
+
+        fullSnakeCorners = []
+        dir = "z"
+        
+        #temp/first x,y, and direction values
+        (tx,ty) = self.snakeCoordinates[0]
+
+        #work from tail to head
+        for (x,y) in (self.snakeCoordinates[1:]):
+
+            #check which direction snake moving
+            if x>tx:
+                dir = "Right"
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))     
+                #update temp values
+                (tx,ty) = (x,y)
+
+            elif x<tx:
+                dir = "Left"
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))     
+                #update temp values
+                (tx,ty) = (x,y)
+
+            elif y>ty:
+                dir = "Down"
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))     
+                #update temp values
+                (tx,ty) = (x,y)
+            elif y<ty:
+                dir = "Up"
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))     
+                #update temp values
+                (tx,ty) = (x,y)
+                
+        return fullSnakeCorners
+
+    def overlapCheck(self, preyCorners : list, snakeCorners : list)-> bool:
+        
+        overlap = False
+
+        if SNAKE_BIGGER:
+            #x/y,min/max of snake
+            (xmin,ymin) = snakeCorners[0]#top left
+            (xmax,ymax) = snakeCorners[2]#bottom right
+
+            #corners of prey
+            corners = preyCorners
+
+        else:
+            #x/y,min/max of prey
+            (xmin,ymin) = preyCorners[0]#top left
+            (xmax,ymax) = preyCorners[2]#bottom right
+
+            #corners of snake
+            corners = snakeCorners
+            
+        for corner in corners:
+
+            #corner's x and y coordinate
+            (cornerx,cornery) = corner
+
+            #check if corner inside
+            if xmin<cornerx<xmax and ymin<cornery<ymax:
+
+                overlap = True
+                break
+
+        return overlap
 
     def createNewPrey(self) -> None:
         """ 
@@ -238,19 +353,26 @@ class Game():
             To make playing the game easier, set the x and y to be THRESHOLD
             away from the walls. 
         """
+        """
+        We are choosing to allow prey to be created where the score is
+        """
         THRESHOLD = 15   #sets how close prey can be to borders
         
         while True:
             
             #Get random ints for top left point of rectangle making sure follows threshold
-            x_topleft = random.randint(THRESHOLD,WINDOW_WIDTH-THRESHOLD)
-            y_topleft = random.randint(THRESHOLD,WINDOW_HEIGHT-THRESHOLD)
+            x_topleft = random.randint(THRESHOLD,WINDOW_WIDTH-THRESHOLD-PREY_ICON_WIDTH)
+            y_topleft = random.randint(THRESHOLD,WINDOW_HEIGHT-THRESHOLD-PREY_ICON_WIDTH)
 
             
+            fullSnakeCorners = self.getFullSnakeCorners()
+            preyCorners = self.getPreyCorners((x_topleft,y_topleft))
 
+            if any(self.overlapCheck(preyCorners, snakeCorners) for snakeCorners in fullSnakeCorners):
+                continue
+            break
             #make sure don't create on snake checking both corners as if only checkin
-            if((x_topleft,y_topleft) not in self.snakeCoordinates):
-                break
+            
         
         x_bottomright = x_topleft + PREY_ICON_WIDTH
         y_bottomright = y_topleft + PREY_ICON_WIDTH
@@ -263,59 +385,11 @@ class Game():
 
         
     def preyCaptured(self, nSnakeCoord : tuple) -> bool:
-
-        #new x new y from new snake coord
-        nx,ny = nSnakeCoord
-        overlap = False
-
-        if self.direction == "Left":
-            #corner coords of snake
-            snaketl = (nx, ny - SNAKE_ICON_WIDTH // 2)
-            snakebr = (nx + SNAKE_ICON_WIDTH, ny + SNAKE_ICON_WIDTH//2) 
         
-        elif self.direction == "Right":
-            #corner coords of snake
-            snaketl = (nx - SNAKE_ICON_WIDTH, ny - SNAKE_ICON_WIDTH//2)
-            snakebr = (nx, ny + SNAKE_ICON_WIDTH // 2)
-            
-        elif self.direction == "Up":
-            #corner coords of snake
-            snaketl = (nx - SNAKE_ICON_WIDTH // 2, ny)
-            snakebr = (nx + SNAKE_ICON_WIDTH // 2, ny + SNAKE_ICON_WIDTH)
+        snakeCorners = self.getSnakePortionCorners(nSnakeCoord,self.direction)
+        preyCorners = self.getPreyCorners(self.preyCoordinates)
 
-        elif self.direction == "Down":
-            #corner coords of snake
-            snaketl = (nx - SNAKE_ICON_WIDTH // 2, ny - SNAKE_ICON_WIDTH)
-            snakebr = (nx + SNAKE_ICON_WIDTH // 2, ny)
-            
-        #x/y,min/max
-        (xmin,ymin) = snaketl
-        (xmax,ymax) = snakebr
-        
-
-        #x and y of top left corner of prey
-        (pxtl, pytl) = self.preyCoordinates
-
-
-        #store corner cords of prey
-        preycorners = [
-        (pxtl,pytl),                                        #top left
-        (pxtl + PREY_ICON_WIDTH, pytl),                     #top right
-        (pxtl, pytl + PREY_ICON_WIDTH),                     #bottom left
-        (pxtl + PREY_ICON_WIDTH, pytl + PREY_ICON_WIDTH)    #bottom right
-        ]
-        for corner in preycorners:
-
-            #corner's x and y coordinate
-            (cornerx,cornery) = corner
-
-            #check if corner inside snake
-            if xmin<cornerx<xmax and ymin<cornery<ymax:
-
-                overlap = True
-                break
-
-        return overlap
+        return self.overlapCheck(preyCorners,snakeCorners)
 
         
 
@@ -328,7 +402,7 @@ if __name__ == "__main__":
     #add the specified constant PREY_ICON_WIDTH here 
     PREY_ICON_WIDTH = 10
     #storing max icon width to use in preventing overlapping
-    MAX_ICON_WIDTH = max(SNAKE_ICON_WIDTH, PREY_ICON_WIDTH)  
+    SNAKE_BIGGER = (SNAKE_ICON_WIDTH>PREY_ICON_WIDTH)  
 
     BACKGROUND_COLOUR = "green"   #you may change this colour if you wish
     ICON_COLOUR = "yellow"        #you may change this colour if you wish

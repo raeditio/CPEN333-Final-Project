@@ -55,44 +55,61 @@ class Gui():
             command=self.root.destroy)
         self.canvas.create_window(200, 100, anchor="nw", window=gameOverButton)
     
+class SharedState():
 
-class QueueHandler():
+    def __init__(self):
+        # Shared variables for tasks
+        self.lock = threading.Lock()
+        self.game_over_flag = False
+        self.snake_coordinates = SNAKE_STARTING_COORDS
+        self.prey_coordinates = (0, 0, 0, 0)
+        self.score = 0
+        
+
+class SharedStateHandler():
     """
-        This class implements the queue handler for the game.
+        This class implements shared state handling using locks 
+        and thread-safe variables instead of a queue.
     """
     def __init__(self):
-        self.queue = gameQueue
+        self.sharedState = sharedState
         self.gui = gui
-        self.queueHandler()
-    
-    def queueHandler(self):
-        '''
-            This method handles the queue by constantly retrieving
-            tasks from it and accordingly taking the corresponding
-            action.
-            A task could be: game_over, move, prey, score.
-            Each item in the queue is a dictionary whose key is
-            the task type (for example, "move") and its value is
-            the corresponding task value.
-            If the queue.empty exception happens, it schedules 
-            to call itself after a short delay.
-        '''
-        try:
-            while True:
-                task = self.queue.get_nowait()
-                if "game_over" in task:
-                    gui.gameOver()
-                elif "move" in task:
-                    points = [x for point in task["move"] for x in point]
-                    gui.canvas.coords(gui.snakeIcon, *points)
-                elif "prey" in task:
-                    gui.canvas.coords(gui.preyIcon, *task["prey"])
-                elif "score" in task:
-                    gui.canvas.itemconfigure(
-                        gui.score, text=f"Your Score: {task['score']}")
-                self.queue.task_done()
-        except queue.Empty:
-            gui.root.after(100, self.queueHandler)
+        self.updateGui()
+
+    def updateGui(self):
+        """
+            Reads shared variables and updates the GUI elements.
+        """
+        t_snake_coordinates = [0]
+        t_score = -1
+        t_prey_coordinates = (-1,-1)
+
+        with self.sharedState.lock:
+
+            snChange = t_snake_coordinates != self.sharedState.snake_coordinates
+            pChange = t_prey_coordinates != self.sharedState.prey_coordinates
+            scChange = t_score != self.sharedState.score
+
+            if self.sharedState.game_over_flag:
+                self.gui.gameOver()
+            if snChange:
+                self.gui.canvas.coords(gui.snakeIcon, *[x for coord in self.sharedState.snake_coordinates for x in coord])
+                t_snake_coordinates = self.sharedState.snake_coordinates
+            if pChange:
+                self.gui.canvas.coords(gui.preyIcon, *self.sharedState.prey_coordinates)
+                t_prey_coordinates = self.sharedState.prey_coordinates
+            if scChange:
+                self.gui.canvas.itemconfigure(gui.score, text=f"Your Score: {self.sharedState.score}")
+                t_score = self.sharedState.score
+
+            if not self.sharedState.game_over_flag:
+                self.gui.root.after(100, self.updateGui)
+
+
+
+            
+            
+
 
 
 class Game():
@@ -104,17 +121,22 @@ class Game():
            This initializer sets the initial snake coordinate list, movement
            direction, and arranges for the first prey to be created.
         """
-        self.queue = gameQueue
+        self.sharedState = sharedState
         self.score = 0
+        
         #starting length and location of the snake
         #note that it is a list of tuples, each being an
         # (x, y) tuple. Initially its size is 5 tuples.       
-        self.snakeCoordinates = [(495, 55), (485, 55), (475, 55),
-                                 (465, 55), (455, 55)]
+        self.snakeCoordinates = SNAKE_STARTING_COORDS
         #initial direction of the snake
         self.direction = "Left"
         self.gameNotOver = True
+
+        #center coordinates of prey
+        self.preyCoordinates = (0,0)
+
         self.createNewPrey()
+
 
     def superloop(self) -> None:
         """
@@ -127,7 +149,8 @@ class Game():
         SPEED = 0.15     #speed of snake updates (sec)
         while self.gameNotOver:
             #complete the method implementation below
-            pass #remove this line from your implementation
+            self.move()
+            time.sleep(SPEED)
 
     def whenAnArrowKeyIsPressed(self, e) -> None:
         """ 
@@ -159,8 +182,31 @@ class Game():
             The snake coordinates list (representing its length 
             and position) should be correctly updated.
         """
+        #New Head Coord
         NewSnakeCoordinates = self.calculateNewCoordinates()
-        #complete the method implementation below
+        
+        #check for gameover
+        self.isGameOver(NewSnakeCoordinates)
+        
+        #if no game over add new coordinates
+        self.snakeCoordinates.append(NewSnakeCoordinates)
+        with self.sharedState.lock:
+            self.sharedState.snake_coordinates.append(NewSnakeCoordinates)
+
+        #Check if prey captured
+        if self.preyCaptured(NewSnakeCoordinates):
+            
+            #if captured add score and create new prey, length increases so don't remove tail
+            self.score += 1
+            with self.sharedState.lock:
+                self.sharedState.score = self.score
+            self.createNewPrey()
+        else:
+
+            #if no prey captured length doesn't increase so tail is removed
+            with self.sharedState.lock:
+                self.sharedState.snake_coordinates.pop(0)
+
 
 
     def calculateNewCoordinates(self) -> tuple:
@@ -173,7 +219,15 @@ class Game():
             It is used by the move() method.    
         """
         lastX, lastY = self.snakeCoordinates[-1]
-        #complete the method implementation below
+        
+        if self.direction == "Left":
+            return lastX-SNAKE_ICON_WIDTH,lastY
+        if self.direction == "Right":
+            return lastX+SNAKE_ICON_WIDTH,lastY
+        if self.direction == "Up":
+            return lastX,lastY-SNAKE_ICON_WIDTH
+        if self.direction == "Down":
+            return lastX,lastY+SNAKE_ICON_WIDTH
 
 
     def isGameOver(self, snakeCoordinates) -> None:
@@ -185,7 +239,177 @@ class Game():
             field and also adds a "game_over" task to the queue. 
         """
         x, y = snakeCoordinates
-        #complete the method implementation below
+
+        #check for hit wall
+        hit_wall = x > WINDOW_WIDTH or x < 0 or y > WINDOW_HEIGHT or y < 0
+
+        #bit self
+        bit_self = (x,y) in self.snakeCoordinates
+
+        if  hit_wall or bit_self:
+            self.gameNotOver = False
+
+            with self.sharedState.lock:
+                self.sharedState.game_over_flag = not self.gameNotOver
+
+    def getPreyCorners(self,preycoords : tuple)->list:
+        """Generates the four corner coordinates of the prey rectangle 
+        based on its top-left corner.
+
+        Args:
+            preycoords (tuple): The top-left (x, y) coordinates of the prey.
+
+        Returns:
+            list: A list of four tuples representing the coordinates of 
+                the top-left, top-right, bottom-left, and bottom-right corners.
+        """
+    
+        #x and y of top left corner of prey
+        (pxtl, pytl) = preycoords
+        #store corner cords of prey
+        preytl = (pxtl,pytl)
+        preytr = (pxtl + PREY_ICON_WIDTH, pytl)
+        preybl = (pxtl, pytl + PREY_ICON_WIDTH)
+        preybr = (pxtl + PREY_ICON_WIDTH, pytl + PREY_ICON_WIDTH)
+        
+        return[preytl,preytr,preybr,preybl]
+
+
+    def getSnakePortionCorners(self,coords : tuple, direction : str)->list:
+        """
+        Calculates the four corner coordinates of a single portion of the snake
+        based on the middle coordinate of its leading edge and direction of movement.
+
+        Args:
+            coords (tuple): The middle (x, y) coordinates of the leading edge of the snake portion.
+            direction (str): The movement direction ("Left", "Right", "Up", "Down").
+
+        Returns:
+            list: A list of four tuples representing the coordinates of 
+                the top-left, top-right, bottom-left, and bottom-right corners.
+        """
+        (nx,ny) = coords
+
+        if direction == "Left":
+            #corner coords of snake
+            snaketl = (nx, ny - SNAKE_ICON_WIDTH // 2)
+            snaketr = (nx + SNAKE_ICON_WIDTH, ny - SNAKE_ICON_WIDTH // 2)
+            snakebr = (nx + SNAKE_ICON_WIDTH, ny + SNAKE_ICON_WIDTH//2)
+            snakebl = (nx, ny + SNAKE_ICON_WIDTH//2)
+        
+        elif direction == "Right":
+            #corner coords of snake
+            snaketl = (nx - SNAKE_ICON_WIDTH, ny - SNAKE_ICON_WIDTH//2)
+            snaketr = (nx, ny - SNAKE_ICON_WIDTH//2)
+            snakebr = (nx, ny + SNAKE_ICON_WIDTH // 2)
+            snakebl = (nx - SNAKE_ICON_WIDTH, ny + SNAKE_ICON_WIDTH // 2)
+            
+        elif direction == "Up":
+            #corner coords of snake
+            snaketl = (nx - SNAKE_ICON_WIDTH // 2, ny)
+            snaketr = (nx + SNAKE_ICON_WIDTH // 2, ny)
+            snakebr = (nx + SNAKE_ICON_WIDTH // 2, ny + SNAKE_ICON_WIDTH)
+            snakebl = (nx - SNAKE_ICON_WIDTH // 2, ny + SNAKE_ICON_WIDTH)
+
+        elif direction == "Down":
+            #corner coords of snake
+            snaketl = (nx - SNAKE_ICON_WIDTH // 2, ny - SNAKE_ICON_WIDTH)
+            snaketr = (nx + SNAKE_ICON_WIDTH // 2, ny - SNAKE_ICON_WIDTH)
+            snakebr = (nx + SNAKE_ICON_WIDTH // 2, ny)
+            snakebl = (nx - SNAKE_ICON_WIDTH // 2, ny)
+
+        return [snaketl,snaketr,snakebr,snakebl]
+
+    def getFullSnakeCorners(self) -> list:
+        """
+        Retrieves the corner coordinates for all portions of the snake. 
+        Iterates through the snake's coordinates, calculates the corners
+        of each portion, and adds them to a list.
+
+        Returns:
+            list: A list of lists where each inner list contains the 
+                corner coordinates of a snake portion.
+        """
+        fullSnakeCorners = []
+        dir = "z"
+        
+        #temp/first x,y, and direction values
+        (tx,ty) = self.snakeCoordinates[0]
+
+        #work from tail to head
+        for (x,y) in (self.snakeCoordinates[1:]):
+
+            #check which direction snake moving
+            if x>tx:
+                dir = "Right"
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))   #add corner coordinates of portion to list 
+                #update temp values
+                (tx,ty) = (x,y)
+
+            elif x<tx:
+                dir = "Left"
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))   #add corner coordinates of portion to list    
+                #update temp values
+                (tx,ty) = (x,y)
+
+            elif y>ty:
+                dir = "Down"
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))   #add corner coordinates of portion to list     
+                #update temp values
+                (tx,ty) = (x,y)
+            elif y<ty:
+                dir = "Up"
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))   #add corner coordinates of portion to list 
+                #update temp values
+                (tx,ty) = (x,y)
+                
+        return fullSnakeCorners
+
+    def overlapCheck(self, preyCorners : list, snakeCorners : list)-> bool:
+        """
+        Checks for overlap between the prey rectangle and a given portion 
+        of the snake. Determines if any corner of one rectangle lies inside 
+        the other.
+
+        Args:
+            preyCorners (list): A list of tuples representing the prey's corners.
+            snakeCorners (list): A list of tuples representing a snake portion's corners.
+
+        Returns:
+            bool: True if overlap is detected, False otherwise.
+        """
+        overlap = False
+
+        #check which icon bigger to see which rectangle we use as boundary and which we check each of its corners
+        if SNAKE_BIGGER:
+
+            #x/y,min/max of snake
+            (xmin,ymin) = snakeCorners[0]#top left
+            (xmax,ymax) = snakeCorners[2]#bottom right
+
+            #corners of prey
+            corners = preyCorners
+
+        else:
+            #x/y,min/max of prey
+            (xmin,ymin) = preyCorners[0]#top left
+            (xmax,ymax) = preyCorners[2]#bottom right
+
+            #corners of snake
+            corners = snakeCorners
+            
+        for corner in corners:
+
+            #corner's x and y coordinate
+            (cornerx,cornery) = corner
+
+            #check if corner inside
+            if xmin<cornerx<xmax and ymin<cornery<ymax:
+
+                overlap = True
+                break
+
+        return overlap
 
     def createNewPrey(self) -> None:
         """ 
@@ -198,8 +422,64 @@ class Game():
             To make playing the game easier, set the x and y to be THRESHOLD
             away from the walls. 
         """
+        """
+        We are choosing to allow prey to be created where the score is but not on any portion of the snake
+        """
         THRESHOLD = 15   #sets how close prey can be to borders
-        #complete the method implementation below
+
+        #find corner coordinates of all portions of snake to check generated prey corners against
+        fullSnakeCorners = self.getFullSnakeCorners()
+        
+        while True:
+            
+            #Get random ints for top left point of rectangle making sure follows threshold
+            x_topleft = random.randint(THRESHOLD,WINDOW_WIDTH-THRESHOLD-PREY_ICON_WIDTH)
+            y_topleft = random.randint(THRESHOLD,WINDOW_HEIGHT-THRESHOLD-PREY_ICON_WIDTH)
+
+            #get coordinates of potential prey's corners
+            preyCorners = self.getPreyCorners((x_topleft,y_topleft))
+
+            #check if overlap between potential prey and snake
+            if any(self.overlapCheck(preyCorners, snakeCorners) for snakeCorners in fullSnakeCorners):
+                
+                continue    #overlap, regenerate prey
+
+            break   #no overlap, prey position valid
+        
+        #store valid top left coordinates
+        self.preyCoordinates = preyCorners[0]
+        
+        #get bottom right coordinates
+        (x_bottomright,y_bottomright) = preyCorners[2]
+
+        # Add a "prey" task to the queue
+        with self.sharedState.lock:
+            self.sharedState.prey_coordinates = ((x_topleft,y_topleft,x_bottomright,y_bottomright))
+        
+
+
+        
+    def preyCaptured(self, nSnakeCoord : tuple) -> bool:
+        """
+        Determines if the prey has been captured by the snake.
+        Checks for overlap between the prey rectangle and the 
+        new head coordinates of the snake.
+
+        Args:
+            nSnakeCoord (tuple): The (x, y) coordinates of the snake's new head position.
+
+        Returns:
+            bool: True if the prey has been captured, False otherwise.
+        """
+        
+        #corner coordinates
+        snakeCorners = self.getSnakePortionCorners(nSnakeCoord,self.direction)
+        preyCorners = self.getPreyCorners(self.preyCoordinates)
+
+        #check for overlap
+        return self.overlapCheck(preyCorners,snakeCorners)
+
+        
 
 
 if __name__ == "__main__":
@@ -207,18 +487,30 @@ if __name__ == "__main__":
     WINDOW_WIDTH = 500           
     WINDOW_HEIGHT = 300 
     SNAKE_ICON_WIDTH = 15
-    #add the specified constant PREY_ICON_WIDTH here     
+    #add the specified constant PREY_ICON_WIDTH here 
+    PREY_ICON_WIDTH = 10
+    #storing max icon width to use in preventing overlapping
+    SNAKE_BIGGER = (SNAKE_ICON_WIDTH>PREY_ICON_WIDTH)
+
+    SNAKE_STARTING_COORDS = [(495, 55), (485, 55), (475, 55),
+                            (465, 55), (455, 55)] 
 
     BACKGROUND_COLOUR = "green"   #you may change this colour if you wish
     ICON_COLOUR = "yellow"        #you may change this colour if you wish
+    #instantiate a queue object using python's queue class
 
-    gameQueue = queue.Queue()     #instantiate a queue object using python's queue class
+    sharedState = SharedState()
 
     game = Game()        #instantiate the game object
-
+    
     gui = Gui()    #instantiate the game user interface
     
-    QueueHandler()  #instantiate the queue handler    
+    SharedStateHandler() #instantiate a shared state handler object
+    
+    
+
+    
+     
     
     #start a thread with the main loop of the game
     threading.Thread(target = game.superloop, daemon=True).start()

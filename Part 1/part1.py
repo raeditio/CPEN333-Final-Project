@@ -172,7 +172,7 @@ class Game():
         
         self.snakeCoordinates.append(NewSnakeCoordinates)
         #Check if prey captured
-        if NewSnakeCoordinates == self.preyCoordinates:
+        if self.preyCaptured(NewSnakeCoordinates):
             self.score+=1
             self.queue.put({"score": self.score})
             self.createNewPrey()
@@ -255,14 +255,67 @@ class Game():
         x_bottomright = x_topleft + PREY_ICON_WIDTH
         y_bottomright = y_topleft + PREY_ICON_WIDTH
 
-        self.preyCoordinates = (x_topleft + PREY_ICON_WIDTH //2 , y_topleft + PREY_ICON_WIDTH // 2)
+        self.preyCoordinates = (x_topleft, y_topleft)
 
         # Add a "prey" task to the queue
         self.queue.put({"prey":(x_topleft,y_topleft,x_bottomright,y_bottomright)})
 
 
         
+    def preyCaptured(self, nSnakeCoord : tuple) -> bool:
 
+        #new x new y from new snake coord
+        nx,ny = nSnakeCoord
+        overlap = False
+
+        if self.direction == "Left":
+            #corner coords of snake
+            snaketl = (nx, ny - SNAKE_ICON_WIDTH // 2)
+            snakebr = (nx + SNAKE_ICON_WIDTH, ny + SNAKE_ICON_WIDTH//2) 
+        
+        elif self.direction == "Right":
+            #corner coords of snake
+            snaketl = (nx - SNAKE_ICON_WIDTH, ny - SNAKE_ICON_WIDTH//2)
+            snakebr = (nx, ny + SNAKE_ICON_WIDTH // 2)
+            
+        elif self.direction == "Up":
+            #corner coords of snake
+            snaketl = (nx - SNAKE_ICON_WIDTH // 2, ny)
+            snakebr = (nx + SNAKE_ICON_WIDTH // 2, ny + SNAKE_ICON_WIDTH)
+
+        elif self.direction == "Down":
+            #corner coords of snake
+            snaketl = (nx - SNAKE_ICON_WIDTH // 2, ny - SNAKE_ICON_WIDTH)
+            snakebr = (nx + SNAKE_ICON_WIDTH // 2, ny)
+            
+        #x/y,min/max
+        (xmin,ymin) = snaketl
+        (xmax,ymax) = snakebr
+        
+
+        #x and y of top left corner of prey
+        (pxtl, pytl) = self.preyCoordinates
+
+
+        #store corner cords of prey
+        preycorners = [
+        (pxtl,pytl),                                        #top left
+        (pxtl + PREY_ICON_WIDTH, pytl),                     #top right
+        (pxtl, pytl + PREY_ICON_WIDTH),                     #bottom left
+        (pxtl + PREY_ICON_WIDTH, pytl + PREY_ICON_WIDTH)    #bottom right
+        ]
+        for corner in preycorners:
+
+            #corner's x and y coordinate
+            (cornerx,cornery) = corner
+
+            #check if corner inside snake
+            if xmin<cornerx<xmax and ymin<cornery<ymax:
+
+                overlap = True
+                break
+
+        return overlap
 
         
 

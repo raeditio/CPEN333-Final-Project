@@ -168,15 +168,21 @@ class Game():
         #New Head Coord
         NewSnakeCoordinates = self.calculateNewCoordinates()
         
+        #check for gameover
         self.isGameOver(NewSnakeCoordinates)
         
+        #if no game over add new coordinates
         self.snakeCoordinates.append(NewSnakeCoordinates)
+
         #Check if prey captured
         if self.preyCaptured(NewSnakeCoordinates):
+            
+            #if captured add score and create new prey, length increases so don't remove tail
             self.score+=1
             self.queue.put({"score": self.score})
             self.createNewPrey()
         else:
+
             #if no prey captured length doesn't increase so tail is removed
             self.snakeCoordinates.pop(0)
         
@@ -226,7 +232,17 @@ class Game():
             self.queue.put({"game_over" : self.gameNotOver})
 
     def getPreyCorners(self,preycoords : tuple)->list:
+        """Generates the four corner coordinates of the prey rectangle 
+        based on its top-left corner.
 
+        Args:
+            preycoords (tuple): The top-left (x, y) coordinates of the prey.
+
+        Returns:
+            list: A list of four tuples representing the coordinates of 
+                the top-left, top-right, bottom-left, and bottom-right corners.
+        """
+    
         #x and y of top left corner of prey
         (pxtl, pytl) = preycoords
         #store corner cords of prey
@@ -239,7 +255,18 @@ class Game():
 
 
     def getSnakePortionCorners(self,coords : tuple, direction : str)->list:
+        """
+        Calculates the four corner coordinates of a single portion of the snake
+        based on the middle coordinate of its leading edge and direction of movement.
 
+        Args:
+            coords (tuple): The middle (x, y) coordinates of the leading edge of the snake portion.
+            direction (str): The movement direction ("Left", "Right", "Up", "Down").
+
+        Returns:
+            list: A list of four tuples representing the coordinates of 
+                the top-left, top-right, bottom-left, and bottom-right corners.
+        """
         (nx,ny) = coords
 
         if direction == "Left":
@@ -273,7 +300,15 @@ class Game():
         return [snaketl,snaketr,snakebr,snakebl]
 
     def getFullSnakeCorners(self) -> list:
+        """
+        Retrieves the corner coordinates for all portions of the snake. 
+        Iterates through the snake's coordinates, calculates the corners
+        of each portion, and adds them to a list.
 
+        Returns:
+            list: A list of lists where each inner list contains the 
+                corner coordinates of a snake portion.
+        """
         fullSnakeCorners = []
         dir = "z"
         
@@ -286,34 +321,47 @@ class Game():
             #check which direction snake moving
             if x>tx:
                 dir = "Right"
-                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))     
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))   #add corner coordinates of portion to list 
                 #update temp values
                 (tx,ty) = (x,y)
 
             elif x<tx:
                 dir = "Left"
-                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))     
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))   #add corner coordinates of portion to list    
                 #update temp values
                 (tx,ty) = (x,y)
 
             elif y>ty:
                 dir = "Down"
-                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))     
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))   #add corner coordinates of portion to list     
                 #update temp values
                 (tx,ty) = (x,y)
             elif y<ty:
                 dir = "Up"
-                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))     
+                fullSnakeCorners.append(self.getSnakePortionCorners((x,y),dir))   #add corner coordinates of portion to list 
                 #update temp values
                 (tx,ty) = (x,y)
                 
         return fullSnakeCorners
 
     def overlapCheck(self, preyCorners : list, snakeCorners : list)-> bool:
-        
+        """
+        Checks for overlap between the prey rectangle and a given portion 
+        of the snake. Determines if any corner of one rectangle lies inside 
+        the other.
+
+        Args:
+            preyCorners (list): A list of tuples representing the prey's corners.
+            snakeCorners (list): A list of tuples representing a snake portion's corners.
+
+        Returns:
+            bool: True if overlap is detected, False otherwise.
+        """
         overlap = False
 
+        #check which icon bigger to see which rectangle we use as boundary and which we check each of its corners
         if SNAKE_BIGGER:
+
             #x/y,min/max of snake
             (xmin,ymin) = snakeCorners[0]#top left
             (xmax,ymax) = snakeCorners[2]#bottom right
@@ -354,9 +402,12 @@ class Game():
             away from the walls. 
         """
         """
-        We are choosing to allow prey to be created where the score is
+        We are choosing to allow prey to be created where the score is but not on any portion of the snake
         """
         THRESHOLD = 15   #sets how close prey can be to borders
+
+        #find corner coordinates of all portions of snake to check generated prey corners against
+        fullSnakeCorners = self.getFullSnakeCorners()
         
         while True:
             
@@ -364,20 +415,21 @@ class Game():
             x_topleft = random.randint(THRESHOLD,WINDOW_WIDTH-THRESHOLD-PREY_ICON_WIDTH)
             y_topleft = random.randint(THRESHOLD,WINDOW_HEIGHT-THRESHOLD-PREY_ICON_WIDTH)
 
-            
-            fullSnakeCorners = self.getFullSnakeCorners()
+            #get coordinates of potential prey's corners
             preyCorners = self.getPreyCorners((x_topleft,y_topleft))
 
+            #check if overlap between potential prey and snake
             if any(self.overlapCheck(preyCorners, snakeCorners) for snakeCorners in fullSnakeCorners):
-                continue
-            break
-            #make sure don't create on snake checking both corners as if only checkin
-            
-        
-        x_bottomright = x_topleft + PREY_ICON_WIDTH
-        y_bottomright = y_topleft + PREY_ICON_WIDTH
+                
+                continue    #overlap, regenerate prey
 
-        self.preyCoordinates = (x_topleft, y_topleft)
+            break   #no overlap, prey position valid
+        
+        #store valid top left coordinates
+        self.preyCoordinates = preyCorners[0]
+        
+        #get bottom right coordinates
+        (x_bottomright,y_bottomright) = preyCorners[2]
 
         # Add a "prey" task to the queue
         self.queue.put({"prey":(x_topleft,y_topleft,x_bottomright,y_bottomright)})
@@ -385,10 +437,23 @@ class Game():
 
         
     def preyCaptured(self, nSnakeCoord : tuple) -> bool:
+        """
+        Determines if the prey has been captured by the snake.
+        Checks for overlap between the prey rectangle and the 
+        new head coordinates of the snake.
+
+        Args:
+            nSnakeCoord (tuple): The (x, y) coordinates of the snake's new head position.
+
+        Returns:
+            bool: True if the prey has been captured, False otherwise.
+        """
         
+        #corner coordinates
         snakeCorners = self.getSnakePortionCorners(nSnakeCoord,self.direction)
         preyCorners = self.getPreyCorners(self.preyCoordinates)
 
+        #check for overlap
         return self.overlapCheck(preyCorners,snakeCorners)
 
         

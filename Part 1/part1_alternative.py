@@ -202,7 +202,7 @@ class Game():
                 self.sharedState.score = self.score
             self.createNewPrey()
         else:
-
+            self.snakeCoordinates.pop(0)
             #if no prey captured length doesn't increase so tail is removed
             with self.sharedState.lock:
                 self.sharedState.snake_coordinates.pop(0)

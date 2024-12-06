@@ -40,8 +40,8 @@ class ChatClient:
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Prompt user for server details
-        self.server_host = input("Enter server IP: ")
-        self.server_port = int(input("Enter server port: "))
+        self.server_host = "127.0.0.1"
+        self.server_port = 12345
 
         try:
             self.client_socket.connect((self.server_host, self.server_port))

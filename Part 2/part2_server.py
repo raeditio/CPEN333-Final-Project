@@ -46,7 +46,7 @@ class ChatServer:
         It creates a server socket and listens for incoming connections.
         """
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        host = socket.gethostname()
+        host = "127.0.0.1"
         port = 12345  # Default port
 
         try:

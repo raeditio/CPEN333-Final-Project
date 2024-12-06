@@ -3,8 +3,8 @@ from tkinter import *
 import multiprocessing
 import time
 
-import client
-import server
+import part2_client as client
+import part2_server as server
 
 if __name__ == "__main__":
     server = multiprocessing.Process(target=server.main)

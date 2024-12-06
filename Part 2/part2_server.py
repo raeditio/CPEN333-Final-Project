@@ -17,11 +17,121 @@ class ChatServer:
     It uses the tkinter module to create the GUI for the server client.
     See the project info/video for the specs.
     """
-    # To implement 
+    def __init__(self, window):
+        self.window = window
+        self.window.title("Chat Server")
+        
+        # GUI setup
+        self.messages_frame = Frame(self.window)
+        self.scrollbar = Scrollbar(self.messages_frame) # To navigate through past messages
+        # Basic layout
+        self.msg_list = Listbox(self.messages_frame, height=15, width=50, yscrollcommand=self.scrollbar.set)
+        self.scrollbar.pack(side=RIGHT, fill=Y)
+        self.msg_list.pack(side=LEFT, fill=BOTH, expand=True)
+        self.messages_frame.pack()
+
+        self.start_button = Button(self.window, text="Start Server", command=self.start_server)
+        self.start_button.pack()
+
+        self.stop_button = Button(self.window, text="Stop Server", command=self.stop_server, state=DISABLED)
+        self.stop_button.pack()
+
+        self.server_socket = None
+        self.clients = []  # List to keep track of connected clients
+        self.server_running = False
+
+    def start_server(self):
+        """
+        This method starts the server.
+        It creates a server socket and listens for incoming connections.
+        """
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        host = socket.gethostname()
+        port = 12345  # Default port
+
+        try:
+            self.server_socket.bind((host, port))
+            self.server_socket.listen(5)
+            self.msg_list.insert(END, f"Server started on {host}:{port}")
+            self.server_running = True
+            self.start_button.config(state=DISABLED)
+            self.stop_button.config(state=NORMAL)
+
+            # Start the thread to accept connections
+            threading.Thread(target=self.accept_connections, daemon=True).start()
+        except Exception as e:
+            self.msg_list.insert(END, f"Error starting server: {e}")
+    
+    def accept_connections(self):
+        """
+        This method accepts incoming connections.
+        """
+        while self.server_running:
+            try:
+                client_socket, client_address = self.server_socket.accept()
+                self.msg_list.insert(END, f"Client {client_address} connected.")
+                self.clients.append(client_socket)
+
+                # Start a thread to handle this client
+                threading.Thread(target=self.handle_client, args=(client_socket,), daemon=True).start()
+            except OSError:
+                break
+    
+    def handle_client(self, client_socket):
+        """
+        This method handles a client connection.
+        It receives messages from the client and sends them to all other clients.
+        """
+        while self.server_running:
+            try:
+                message = client_socket.recv(1024).decode("utf-8")
+                if message:
+                    self.msg_list.insert(END, message)
+                    self.broadcast(message, client_socket)
+            except ConnectionResetError:
+                break
+        client_socket.close()
+        
+    def broadcast(self, message, client_socket):
+        """
+        This method sends the message to all clients except the sender.
+        """
+        for client in self.clients:
+            if client != client_socket:
+                try:
+                    client.sendall(message.encode("utf-8"))
+                except:
+                    self.clients.remove(client)
+                    
+    def stop_server(self):
+        """
+        This method stops the server.
+        Stop the chat server and disconnect all clients.
+        """
+        self.server_running = False
+        for client in self.clients:
+            client.close()
+        self.clients.clear()
+
+        if self.server_socket:
+            self.server_socket.close()
+            self.server_socket = None
+
+        self.msg_list.insert(END, "Server stopped.")
+        self.start_button.config(state=NORMAL)
+        self.stop_button.config(state=DISABLED)
+    
+    def on_closing(self):
+        """
+        This method is called when the window is closed.
+        """
+        self.server_running = False
+        self.window.destroy()
 
 def main(): #Note that the main function is outside the ChatServer class
     window = Tk()
-    ChatServer(window)
+    server = ChatServer(window)
+    window.protocol("WM_DELETE_WINDOW", server.on_closing)
     window.mainloop()
     #May add more or modify, if needed
 

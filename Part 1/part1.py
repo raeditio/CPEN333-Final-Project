@@ -114,7 +114,12 @@ class Game():
         #initial direction of the snake
         self.direction = "Left"
         self.gameNotOver = True
+
+        #center coordinates of prey
+        self.preyCoordinates = (0,0)
+
         self.createNewPrey()
+
 
     def superloop(self) -> None:
         """
@@ -127,7 +132,8 @@ class Game():
         SPEED = 0.15     #speed of snake updates (sec)
         while self.gameNotOver:
             #complete the method implementation below
-            pass #remove this line from your implementation
+            self.move()
+            time.sleep(SPEED)
 
     def whenAnArrowKeyIsPressed(self, e) -> None:
         """ 
@@ -159,8 +165,23 @@ class Game():
             The snake coordinates list (representing its length 
             and position) should be correctly updated.
         """
+        #New Head Coord
         NewSnakeCoordinates = self.calculateNewCoordinates()
-        #complete the method implementation below
+        
+        self.isGameOver(NewSnakeCoordinates)
+        
+        self.snakeCoordinates.append(NewSnakeCoordinates)
+        #Check if prey captured
+        if NewSnakeCoordinates == self.preyCoordinates:
+            self.score+=1
+            self.queue.put({"score": self.score})
+            self.createNewPrey()
+        else:
+            #if no prey captured length doesn't increase so tail is removed
+            self.snakeCoordinates.pop(0)
+        
+        self.queue.put({"move" : self.snakeCoordinates})
+
 
 
     def calculateNewCoordinates(self) -> tuple:
@@ -173,7 +194,15 @@ class Game():
             It is used by the move() method.    
         """
         lastX, lastY = self.snakeCoordinates[-1]
-        #complete the method implementation below
+        
+        if self.direction == "Left":
+            return lastX-SNAKE_ICON_WIDTH,lastY
+        if self.direction == "Right":
+            return lastX+SNAKE_ICON_WIDTH,lastY
+        if self.direction == "Up":
+            return lastX,lastY-SNAKE_ICON_WIDTH
+        if self.direction == "Down":
+            return lastX,lastY+SNAKE_ICON_WIDTH
 
 
     def isGameOver(self, snakeCoordinates) -> None:
@@ -185,6 +214,17 @@ class Game():
             field and also adds a "game_over" task to the queue. 
         """
         x, y = snakeCoordinates
+
+        #check for hit wall
+        hit_wall = x > WINDOW_WIDTH or x < 0 or y > WINDOW_HEIGHT or y < 0
+
+        #bit self
+        bit_self = (x,y) in self.snakeCoordinates
+
+        if  hit_wall or bit_self:
+            self.gameNotOver = False
+            self.queue.put({"game_over" : self.gameNotOver})
+
         #complete the method implementation below
 
     def createNewPrey(self) -> None:
@@ -199,7 +239,32 @@ class Game():
             away from the walls. 
         """
         THRESHOLD = 15   #sets how close prey can be to borders
-        #complete the method implementation below
+        
+        while True:
+            
+            #Get random ints for top left point of rectangle making sure follows threshold
+            x_topleft = random.randint(THRESHOLD,WINDOW_WIDTH-THRESHOLD)
+            y_topleft = random.randint(THRESHOLD,WINDOW_HEIGHT-THRESHOLD)
+
+            
+
+            #make sure don't create on snake checking both corners as if only checkin
+            if((x_topleft,y_topleft) not in self.snakeCoordinates):
+                break
+        
+        x_bottomright = x_topleft + PREY_ICON_WIDTH
+        y_bottomright = y_topleft + PREY_ICON_WIDTH
+
+        self.preyCoordinates = (x_topleft + PREY_ICON_WIDTH //2 , y_topleft + PREY_ICON_WIDTH // 2)
+
+        # Add a "prey" task to the queue
+        self.queue.put({"prey":(x_topleft,y_topleft,x_bottomright,y_bottomright)})
+
+
+        
+
+
+        
 
 
 if __name__ == "__main__":
@@ -207,7 +272,10 @@ if __name__ == "__main__":
     WINDOW_WIDTH = 500           
     WINDOW_HEIGHT = 300 
     SNAKE_ICON_WIDTH = 15
-    #add the specified constant PREY_ICON_WIDTH here     
+    #add the specified constant PREY_ICON_WIDTH here 
+    PREY_ICON_WIDTH = 10
+    #storing max icon width to use in preventing overlapping
+    MAX_ICON_WIDTH = max(SNAKE_ICON_WIDTH, PREY_ICON_WIDTH)  
 
     BACKGROUND_COLOUR = "green"   #you may change this colour if you wish
     ICON_COLOUR = "yellow"        #you may change this colour if you wish

@@ -79,25 +79,24 @@ class ChatServer:
                 threading.Thread(target=self.handle_client, args=(client_socket, client_id), daemon=True).start()
             except OSError:
                 break
-
     
-    def handle_client(self, client_socket):
+    def handle_client(self, client_socket, client_id):
         """
-        This method handles a client connection.
-        It receives messages from the client and sends them to all other clients.
+        Handles communication with a connected client.
+        Logs and broadcasts messages received from the client.
         """
-        client_address = client_socket.getpeername()  # Get client address
-        client_id = f"client{self.clients.index(client_socket) + 1}"  # Assign a unique ID
         while self.server_running:
             try:
                 message = client_socket.recv(1024).decode("utf-8")
                 if message:
+                    # Log the received message in the server GUI
                     formatted_message = f"{client_id}: {message}"
-                    self.msg_list.insert(END, formatted_message)  # Display in the server GUI
+                    self.msg_list.insert(END, formatted_message)  # Display in the server log
                     self.broadcast(formatted_message, client_socket)
             except ConnectionResetError:
                 break
         client_socket.close()
+
         
     def broadcast(self, message, client_socket):
         """

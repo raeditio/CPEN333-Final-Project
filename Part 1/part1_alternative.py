@@ -7,7 +7,6 @@
 """
 
 import threading
-import queue        #the thread-safe queue from Python standard library
 
 from tkinter import Tk, Canvas, Button
 import random, time
@@ -56,9 +55,13 @@ class Gui():
         self.canvas.create_window(200, 100, anchor="nw", window=gameOverButton)
     
 class SharedState():
-
+    """
+    This class encapsulates the shared state of the game, using thread-safe mechanisms
+    to handle concurrent updates. It replaces the need for a queue by providing
+    shared variables protected by a lock.
+    """
     def __init__(self):
-        # Shared variables for tasks
+        # Shared variables for game state management
         self.lock = threading.Lock()
         self.game_over_flag = False
         self.snake_coordinates = SNAKE_STARTING_COORDS
@@ -78,7 +81,9 @@ class SharedStateHandler():
 
     def updateGui(self):
         """
-            Reads shared variables and updates the GUI elements.
+        Reads the shared state variables and updates the GUI elements accordingly.
+        Uses temporary variables to detect changes in the state and ensures updates
+        are only applied when necessary.
         """
         t_snake_coordinates = [0]
         t_score = -1
@@ -174,9 +179,8 @@ class Game():
             This method implements what is needed to be done
             for the movement of the snake.
             It generates a new snake coordinate. 
-            If based on this new movement, the prey has been 
-            captured, it adds a task to the queue for the updated
-            score and also creates a new prey.
+            If based on this new movement the prey has been 
+            captured, it updates the score and creates a new prey.
             It also calls a corresponding method to check if 
             the game should be over. 
             The snake coordinates list (representing its length 
@@ -202,8 +206,9 @@ class Game():
                 self.sharedState.score = self.score
             self.createNewPrey()
         else:
-            self.snakeCoordinates.pop(0)
+
             #if no prey captured length doesn't increase so tail is removed
+            self.snakeCoordinates.pop(0)
             with self.sharedState.lock:
                 self.sharedState.snake_coordinates.pop(0)
 
@@ -235,8 +240,8 @@ class Game():
             This method checks if the game is over by 
             checking if now the snake has passed any wall
             or if it has bit itself.
-            If that is the case, it updates the gameNotOver 
-            field and also adds a "game_over" task to the queue. 
+            If that is the case, it updates the `gameNotOver` field 
+            and sets the game over flag in the shared state. 
         """
         x, y = snakeCoordinates
 
@@ -413,18 +418,11 @@ class Game():
 
     def createNewPrey(self) -> None:
         """ 
-            This methods picks an x and a y randomly as the coordinate 
-            of the new prey and uses that to calculate the 
-            coordinates (x - 5, y - 5, x + 5, y + 5). [you need to replace 5 with a constant]
-            It then adds a "prey" task to the queue with the calculated
-            rectangle coordinates as its value. This is used by the 
-            queue handler to represent the new prey.                    
-            To make playing the game easier, set the x and y to be THRESHOLD
-            away from the walls. 
+            Generates random top-left coordinates for the new prey while ensuring
+            it does not overlap with the snake. Updates the shared state with
+            the new prey's position. We are choosing to allow prey to be created where the score is
         """
-        """
-        We are choosing to allow prey to be created where the score is but not on any portion of the snake
-        """
+
         THRESHOLD = 15   #sets how close prey can be to borders
 
         #find corner coordinates of all portions of snake to check generated prey corners against
@@ -497,9 +495,8 @@ if __name__ == "__main__":
 
     BACKGROUND_COLOUR = "green"   #you may change this colour if you wish
     ICON_COLOUR = "yellow"        #you may change this colour if you wish
-    #instantiate a queue object using python's queue class
-
-    sharedState = SharedState()
+    
+    sharedState = SharedState() # Instantiate the shared state for thread-safe communication
 
     game = Game()        #instantiate the game object
     

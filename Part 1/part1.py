@@ -394,7 +394,7 @@ class Game():
         """ 
             This methods picks an x and a y randomly as the coordinate 
             of the new prey and uses that to calculate the 
-            coordinates (x - 5, y - 5, x + 5, y + 5). [you need to replace 5 with a constant]
+            top left corner coordinates of the prey
             It then adds a "prey" task to the queue with the calculated
             rectangle coordinates as its value. This is used by the 
             queue handler to represent the new prey.                    

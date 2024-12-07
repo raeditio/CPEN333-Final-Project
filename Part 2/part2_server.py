@@ -64,30 +64,37 @@ class ChatServer:
     
     def accept_connections(self):
         """
-        This method accepts incoming connections.
+        Accepts incoming connections and assigns client IDs.
         """
         while self.server_running:
             try:
                 client_socket, client_address = self.server_socket.accept()
-                self.msg_list.insert(END, f"Client {client_address} connected.")
+                client_id = f"client{len(self.clients) + 1}"  # Assign unique ID
                 self.clients.append(client_socket)
+                self.msg_list.insert(END, f"{client_id} connected from {client_address}.")
+                # Notify the client of its ID
+                client_socket.sendall(client_id.encode("utf-8"))
 
                 # Start a thread to handle this client
-                threading.Thread(target=self.handle_client, args=(client_socket,), daemon=True).start()
+                threading.Thread(target=self.handle_client, args=(client_socket, client_id), daemon=True).start()
             except OSError:
                 break
+
     
     def handle_client(self, client_socket):
         """
         This method handles a client connection.
         It receives messages from the client and sends them to all other clients.
         """
+        client_address = client_socket.getpeername()  # Get client address
+        client_id = f"client{self.clients.index(client_socket) + 1}"  # Assign a unique ID
         while self.server_running:
             try:
                 message = client_socket.recv(1024).decode("utf-8")
                 if message:
-                    self.msg_list.insert(END, message)
-                    self.broadcast(message, client_socket)
+                    formatted_message = f"{client_id}: {message}"
+                    self.msg_list.insert(END, formatted_message)  # Display in the server GUI
+                    self.broadcast(formatted_message, client_socket)
             except ConnectionResetError:
                 break
         client_socket.close()
@@ -102,6 +109,7 @@ class ChatServer:
                     client.sendall(message.encode("utf-8"))
                 except:
                     self.clients.remove(client)
+
                     
     def stop_server(self):
         """

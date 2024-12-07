@@ -16,10 +16,29 @@ class ChatClient:
     """
 
     def __init__(self, window):
+        """
+        Initialize the chat client, including GUI and socket setup.
+        """
         self.window = window
-        self.window.title("Chat Client")
 
-        # Set up the GUI
+        # Networking setup
+        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Prompt user for server details
+        self.server_host = "127.0.0.1"
+        self.server_port = 12345
+
+        try:
+            self.client_socket.connect((self.server_host, self.server_port))
+            # Receive the client ID from the server
+            self.client_id = self.client_socket.recv(1024).decode("utf-8")
+            self.window.title(self.client_id)  # Set the title to the client ID
+        except Exception as e:
+            self.window.title("Chat Client - Error")
+            self.msg_list.insert(END, f"Unable to connect to server: {e}")
+            return
+
+        # GUI setup
         self.messages_frame = Frame(self.window)
         self.scrollbar = Scrollbar(self.messages_frame)  # For scrolling messages
         self.msg_list = Listbox(self.messages_frame, height=15, width=50, yscrollcommand=self.scrollbar.set)
@@ -36,19 +55,7 @@ class ChatClient:
         self.send_button = Button(self.window, text="Send", command=self.send_message)
         self.send_button.pack()
 
-        # Networking setup
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # Prompt user for server details
-        self.server_host = "127.0.0.1"
-        self.server_port = 12345
-
-        try:
-            self.client_socket.connect((self.server_host, self.server_port))
-            self.msg_list.insert(END, "Connected to the server.")
-        except Exception as e:
-            self.msg_list.insert(END, f"Unable to connect to server: {e}")
-            return
+        self.msg_list.insert(END, f"Connected to the server as {self.client_id}.")
 
         # Start a thread to receive messages
         self.stop_thread = False
@@ -60,14 +67,18 @@ class ChatClient:
         
     def send_message(self, event=None):
         """
-        This method sends the message to the server.
+        Send the message to the server and display it in the client's GUI.
         """
         message = self.message_var.get()
-        self.message_var.set("") # Clear the input field
-        try:
-            self.client_socket.sendall(message.encode("utf-8"))
-        except Exception as e:
-            self.msg_list.insert(END, f"Error sending message: {e}")
+        self.message_var.set("")  # Clear the input field
+        if message.strip():  # Avoid sending empty messages
+            try:
+                self.client_socket.sendall(message.encode("utf-8"))
+                # Display the sent message in the client's GUI
+                self.msg_list.insert(END, f"{self.client_id}: {message}")
+            except Exception as e:
+                self.msg_list.insert(END, f"Error sending message: {e}")
+
     
     def receive_messages(self):
         """
